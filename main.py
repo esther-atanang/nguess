@@ -4,13 +4,23 @@ import random
 import threading
 import time
 from curses import wrapper, window
+from typing import Any, TypedDict
+
+class GameState(TypedDict):
+    current_screen: int
+    level:str
+    max_attempts:int
+    attempts:int
+    secret_number: int
+    time_left:int
+    quit:bool
 
 Y_START_POINT = 3
 INPUT_LABEL = "Your guess: "
 MAX_TIMER_SECONDS = 15
 timer_thread = None
 
-STATE = {
+STATE: GameState = {
     "current_screen": 0,
     "level": "Easy",
     "max_attempts": 5,
@@ -27,7 +37,15 @@ WIN_CONFIG = {
     "begin_x": 10,
 }
 
-def countdown(win: window, state, seconds, current_attempt):
+def countdown(win: window, state:GameState, seconds:int, current_attempt:int):
+    """Creates a countdown timer and draws the remaining seconds on the screen.
+
+    Args:
+        win (window): Screen to be drawn to
+        state (dict[str, Any]): The current game state
+        seconds (int): The amount of seconds to countdown
+        current_attempt (int): The current guess attempt 
+    """
     _, width = win.getmaxyx()
     while seconds > 0 and (current_attempt == state["attempts"]):
         minutes, secs = divmod(seconds, 60)
@@ -40,21 +58,55 @@ def countdown(win: window, state, seconds, current_attempt):
     state['time_left'] = 0
     return
 
-def get_center(text, width):
+def get_center(text:str, width:int) -> int:
+    """Gets the center of a window to place a text.
+
+    Args:
+        text (str): The text to place at the center
+        width (int): The width of the window
+
+    Returns:
+        int: The windows center
+    """
     mid = width // 2
     return mid - (len(text) // 2)
 
-def draw_controls(controls, win, width, start=13):
+def draw_controls(controls:list[str], win:window, width:int, start:int=13):
+    """Draws a list of windows controls to the sceen.
+
+    Args:
+        controls (list[str]): The controls.
+        win (window): The screen to be drawn to.
+        width (int): The total width of the window.
+        start (int, optional): The row to start from. Defaults to 13.
+    """
     for index, text in enumerate(controls, start=start):
         win.addstr(index, get_center(text, width), text)
 
-def draw_descriptions(descriptions, win, width, row=None):
+def draw_descriptions(descriptions:list[str], win: window, width:int, row:int | None =None):
+    """Draws a descriptions to a window's screen.
+
+    Args:
+        descriptions (list[str]): The descriptions 
+        win (window): The curses screen
+        width (int): The total width of the window
+        row (int | None, optional): The row to start from. Defaults to None.
+    """
+    
     base_row = row if row is not None else Y_START_POINT
     for i, text in enumerate(descriptions):
         win.addstr(base_row + (i * 2), get_center(text, width), text)
+        
     return
 
-def draw_attempts(win: window, attempts, max_attempts):
+def draw_attempts(win: window, attempts:int, max_attempts:int):
+    """Draws the amount of attempts onto the window.
+
+    Args:
+        win (window): The current screen
+        attempts (int): The number of attempts a player has made.
+        max_attempts (int): The total attempts the player can make.
+    """
     row = 5
     _, width = win.getmaxyx()
     attempt_info = f"Attempts: {attempts}/{max_attempts}"
@@ -62,7 +114,14 @@ def draw_attempts(win: window, attempts, max_attempts):
     win.addstr(row, max(0, width - len(attempt_info) - 4), attempt_info)
     return
 
-def draw_game_screen_descr(win, width, level):
+def draw_game_screen_descr(win:window, width:int, level:str):
+    """Draws descriptions onto the game screen.
+
+    Args:
+        win (window): The current screen.
+        width (int): The width of the current window
+        level (str): The current level being played
+    """
     time_info = "Time Left"
     guess_info = "I am thinking of a number between 1 and 100"
 
@@ -78,31 +137,77 @@ def draw_game_screen_descr(win, width, level):
     win.addstr(row, get_center(guess_info, width), guess_info)
     return
 
-def create_window(height, width, begin_y, begin_x, border=True):
+def create_window(height:int, width:int, begin_y:int, begin_x:int, border:bool=True):
+    """Creates a curses window.
+
+    Args:
+        height (int): The height of the window
+        width (int): The size of the window
+        begin_y (int): The vertical start of the window in relation to the main window
+        begin_x (int): The Horizontal start of the window in relation to the main window
+        border (bool, optional): Determines if the user will have a window or not. Defaults to 
+
+    Returns:
+        window: A Screen 
+    """
     win = curses.newwin(height, width, begin_y, begin_x)
     win.keypad(True)
     if border:
         win.border("|", "|")
     return win
 
-def create_title_window(width, begin_y, begin_x):
+def create_title_window(width:int, begin_y:int, begin_x:int):
+    """Creates the in game title window.
+
+    Args:
+        width (int): The total size of the window
+        begin_y (int): The vertical start of the window in relation to the main window 
+        begin_x (int): The Horizontal start of the window in relation to the main window
+
+    Returns:
+        window : The screen
+    """
     title = "Number guessing game"
     win = create_window(3, width, begin_y, begin_x)
     win.addstr(1, get_center(title, width - 4), title.upper())
     return win
 
-def create_timer_window(begin_y, begin_x, state):
-    elapsed_time = "00:00"
-    width = len(elapsed_time) + 4
-    return create_window(3, width, begin_y, begin_x + len(elapsed_time) + 1)
+def create_timer_window(begin_y:int, begin_x:int):
+    """Creates the ingame timer window.
 
-def create_input_window(width, begin_y, begin_x):
+    Args:
+        begin_y (int): The vertical start in relative to the main window
+        begin_x (int): The horizontal start, relative to the main window
+
+    Returns:
+        window: The Title screen
+    """
+    width = 9
+    return create_window(3, width, begin_y, begin_x + 6)
+
+def create_input_window(width:int, begin_y:int, begin_x:int):
+    """Creates the in game input window.
+
+    Args:
+        width (int): The total size of the current window
+        begin_y (int): The vertical start, relative to the main window 
+        begin_x (int): The horizontal start, relative to the main window 
+
+    Returns:
+        window: The Input Screen
+    """
     win = create_window(3, width, begin_y, begin_x, False)
     win.addstr(0, 0, INPUT_LABEL)
     win.move(0, len(INPUT_LABEL))
     return win
 
-def navigate_ingame_screens(win, state):
+def navigate_ingame_screens(win: window, state: GameState):
+    """Navigates between screens during the game session.
+
+    Args:
+        win (window): current screen 
+        state (GameState): The current game state
+    """
     submitted = False
     while not submitted:
         key = win.getch()
@@ -114,7 +219,15 @@ def navigate_ingame_screens(win, state):
             submitted = True
     return
 
-def get_user_guess(win: window, main: window, timer_win: window, state):
+def get_user_guess(win: window, main: window, timer_win: window, state: GameState):
+    """Gets the user typed guess.
+
+    Args:
+        win (window): The current screen
+        main (window): The main screen the current screen is drawn on
+        timer_win (window): The timer screen
+        state (GameState): The current game state
+    """
     row = 0
     left_margin = len(INPUT_LABEL)
     guess: list = []
@@ -124,7 +237,7 @@ def get_user_guess(win: window, main: window, timer_win: window, state):
     while True:
         key = win.getch()
 
-        win.addstr(row, len(INPUT_LABEL), " " * max(1, len(guess)))
+        
 
         if state['time_left'] == 0 and (state['max_attempts'] == state["attempts"]):
             state['current_screen'] = 5
@@ -141,7 +254,7 @@ def get_user_guess(win: window, main: window, timer_win: window, state):
         if key in (curses.KEY_ENTER, 10, 13):
             value = "".join(guess).strip()
             win.addstr(2, 0, " " * (width - 2))
-
+            win.addstr(row, len(INPUT_LABEL), " " * max(1, len(guess)))
             if not value:
                 hint_info = "Type a number first."
                 your_guess = -1
@@ -194,7 +307,19 @@ def get_user_guess(win: window, main: window, timer_win: window, state):
             win.addch(row, left_margin, guess[-1])
             left_margin += 1
 
-def game_screen(state, height, width, begin_y, begin_x):
+def game_screen(state: GameState, height:int, width:int, begin_y:int, begin_x:int):
+    """The game screen.
+
+    Args:
+        height (int): The screen's height
+        width (int): The screen's width
+        begin_y (int): The vertical start point, relative to the main screen
+        begin_x (int): The horizontal start point, relative to the main screen
+        state (GameState): The current game's state
+
+    Returns:
+        window: The drawn game screen
+    """
     state["secret_number"] = random.randrange(1, 100)
     controls = [
         f"{'ENTER':<12}{'Submit':<6}",
@@ -207,7 +332,7 @@ def game_screen(state, height, width, begin_y, begin_x):
     input_win = create_input_window(width - 4, begin_y + 13, begin_x + 2)
 
     row = Y_START_POINT + 5
-    timer_win = create_timer_window(row, (width // 2), state)
+    timer_win = create_timer_window(row, (width // 2))
 
     draw_game_screen_descr(main, width, state["level"])
     draw_attempts(main, state["attempts"], state["max_attempts"])
@@ -217,7 +342,19 @@ def game_screen(state, height, width, begin_y, begin_x):
 
     return main, title_win, timer_win, input_win
 
-def win_screen(height, width, begin_y, begin_x, state):
+def win_screen(height:int, width:int, begin_y:int, begin_x:int, state: GameState):
+    """The screen shown to the user when they guess correctly.
+
+    Args:
+        height (int): The screen's height
+        width (int): The screen's width
+        begin_y (int): The vertical start point, relative to the main screen
+        begin_x (int): The horizontal start point, relative to the main screen
+        state (GameState): The current game's state
+
+    Returns:
+        window: The winning screen
+    """
     descriptions = [
         "YOU WON",
         "🎉",
@@ -243,7 +380,19 @@ def win_screen(height, width, begin_y, begin_x, state):
 
     return win
 
-def lose_screen(height, width, begin_y, begin_x, state):
+def lose_screen(height: int, width: int, begin_y: int, begin_x: int, state: GameState):
+    """The screen shown to the user when they guess wrongly.
+
+    Args:
+        height (int): The screen's height
+        width (int): The screen's width
+        begin_y (int): The vertical start point, relative to the main screen
+        begin_x (int): The horizontal start point, relative to the main screen
+        state (GameState): The current game's state
+
+    Returns:
+        window: The losing screen
+    """
     descriptions = [
         "GAME OVER",
         "You ran out of chances.",
@@ -260,7 +409,19 @@ def lose_screen(height, width, begin_y, begin_x, state):
 
     return win
 
-def time_out_screen(height, width, begin_y, begin_x, state):
+def time_out_screen(height: int, width: int, begin_y: int, begin_x: int, state: GameState):
+    """The screen shown to the user when run out of time.
+
+    Args:
+        height (int): The screen's height
+        width (int): The screen's width
+        begin_y (int): The vertical start point, relative to the main screen
+        begin_x (int): The horizontal start point, relative to the main screen
+        state (GameState): The current game's state
+
+    Returns:
+        window: The timeout losing screen
+    """
     descriptions = [
         "TIME'S UP!",
         "You ran out of time.",
@@ -280,7 +441,19 @@ def time_out_screen(height, width, begin_y, begin_x, state):
 
     return win
 
-def difficulty_screen(state, height=0, width=0, begin_y=0, begin_x=0):
+def difficulty_screen(state: GameState, height: int=0, width: int=0, begin_y: int=0, begin_x: int=0):
+    """Choose a level screen.
+
+    Args:
+        height (int): The screen's height
+        width (int): The screen's width
+        begin_y (int): The vertical start point, relative to the main screen
+        begin_x (int): The horizontal start point, relative to the main screen
+        state (GameState): The current game's state
+
+    Returns:
+        window: The pick a level screen
+    """
     title = "SELECT DIFFICULTY"
     screen_description = "How confident are you?"
 
@@ -350,7 +523,19 @@ def difficulty_screen(state, height=0, width=0, begin_y=0, begin_x=0):
 
         draw_cursor()
 
-def welcome_screen(state, height=0, width=0, begin_y=0, begin_x=0):
+def welcome_screen(state: GameState, height: int=0, width: int=0, begin_y: int=0, begin_x: int=0):
+    """The first screen shown to the user
+
+    Args:
+        height (int): The screen's height
+        width (int): The screen's width
+        begin_y (int): The vertical start point, relative to the main screen
+        begin_x (int): The horizontal start point, relative to the main screen
+        state (GameState): The current game's state
+
+    Returns:
+        window: The welcome screen
+    """
     title = "NUMBER GUESSING GAME"
     instructions = [
         "I'm thinking of a number between 1 and 100.",
@@ -379,7 +564,15 @@ def welcome_screen(state, height=0, width=0, begin_y=0, begin_x=0):
             state["quit"] = True
             return win
 
-def refresh_windows(win, title_win, timer_win, input_win):
+def refresh_windows(win: window | None, title_win:window | None, timer_win: window | None, input_win: window|None):
+    """Refreshes the curses windows
+
+    Args:
+        win (window | None): The main window
+        title_win (window | None): The title in-game window
+        timer_win (window | None): The timer in-game window
+        input_win (window | None): The input in-game window
+    """
     global timer_thread
 
     if win:
@@ -397,7 +590,16 @@ def refresh_windows(win, title_win, timer_win, input_win):
         timer_thread = threading.Thread(target=countdown, args=(timer_win, STATE, MAX_TIMER_SECONDS, STATE["attempts"]), daemon=True)
         timer_thread.start()
 
-def select_screen(state, height=0, width=0, begin_y=0, begin_x=0):
+def select_screen(state: GameState, height: int=0, width: int=0, begin_y: int=0, begin_x: int=0):
+    """Displays a particular screen
+
+    Args:
+        height (int): The screen's height
+        width (int): The screen's width
+        begin_y (int): The vertical start point, relative to the main screen
+        begin_x (int): The horizontal start point, relative to the main screen
+        state (GameState): The current game's state
+    """
     win = None
     title_win = None
     timer_win = None
@@ -427,10 +629,15 @@ def select_screen(state, height=0, width=0, begin_y=0, begin_x=0):
 
     if (input_win and timer_win and win):
         get_user_guess(input_win, win, timer_win, state)
-    if ingame:
+    if ingame and win:
         navigate_ingame_screens(win, state)
 
 def main(stdscr: window):
+    """Creates the standard screen
+
+    Args:
+        stdscr (window): The main screen
+    """
     stdscr.clear()
     curses.curs_set(0)
     curses.use_default_colors()
