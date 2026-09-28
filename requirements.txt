@@ -1,0 +1,1 @@
+curses  # Note: curses is part of the Python standard library and may not need to be listed.
